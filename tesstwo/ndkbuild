@@ -1,0 +1,23 @@
+#!/bin/sh
+ndk-build -j 2
+rm ../Autoanswer/libs/armeabi/liblept.so ../Autoanswer/libs/armeabi/libtess.so
+cp  ./libs/armeabi/liblept.so  ../Autoanswer/libs/armeabi/
+cp  ./libs/armeabi/libtess.so  ../Autoanswer/libs/armeabi/
+
+rm -rf /cygdrive/f/workspace/souzuoyetest/AutoAnswer/src/main/jniLibs/armeabi/libtess.so  /cygdrive/f/workspace/souzuoyetest/AutoAnswer/src/main/jniLibs/armeabi/liblept.so
+
+
+cp  ./libs/armeabi/libtess.so /cygdrive/f/workspace/souzuoyetest/AutoAnswer/src/main/jniLibs/armeabi/
+cp  ./libs/armeabi/liblept.so /cygdrive/f/workspace/souzuoyetest/AutoAnswer/src/main/jniLibs/armeabi/
+
+rm -rf  /cygdrive/f/workspace/tesseract/tesseract/src/main/jniLibs/armeabi/libtess.so 
+rm -rf  /cygdrive/f/workspace/tesseract/tesseract/src/main/jniLibs/armeabi/liblept.so
+
+cp  ./libs/armeabi/libtess.so /cygdrive/f/workspace/tesseract/tesseract/src/main/jniLibs/armeabi/
+cp  ./libs/armeabi/liblept.so /cygdrive/f/workspace/tesseract/tesseract/src/main/jniLibs/armeabi/
+
+
+#adb shell rm -rf /data/data/cn.dream.android.wenba.debug/lib/libtess.so
+#adb shell rm -rf /system/lib/libtess.so
+#adb push ./libs/armeabi/libtess.so /system/lib/
+#adb push ./libs/armeabi/libtess.so /data/data/cn.dream.android.wenba.debug/lib/

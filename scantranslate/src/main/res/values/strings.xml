@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">ScanTranslate</string>
+    <string name="noHardCamera">没有找到相机设备</string>
+    <string name="cameraOpenFail">相机启动失败,请重试</string>
+</resources>
