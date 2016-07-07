@@ -1,15 +1,20 @@
 package com.readboy.scantranslate.Translation.youdao;
 
+import android.util.Log;
+
 import com.readboy.scantranslate.Translation.InterpretService;
 import com.readboy.scantranslate.Translation.Interpreter;
 import com.readboy.scantranslate.Translation.TranslateResult;
 
 import retrofit2.Retrofit;
+import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
 import rx.Observable;
 import rx.Observer;
 import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action1;
 import rx.functions.Func1;
+import rx.functions.Func2;
 import rx.schedulers.Schedulers;
 
 /**
@@ -29,7 +34,6 @@ public class YoudaoInterpreter implements Interpreter {
     private static final String VERSION = "1.1";
 
     private InterpretService service;
-    private YoudaoTranslateJsonBean mYoudaoJsonBean;
 
     @Override
     public void translate(String query, Observer<TranslateResult> observer) {
@@ -37,6 +41,7 @@ public class YoudaoInterpreter implements Interpreter {
             Retrofit retrofit = new Retrofit.Builder()
                     .baseUrl(URL)
                     .addConverterFactory(GsonConverterFactory.create())
+                    .addCallAdapterFactory(RxJavaCallAdapterFactory.create())
                     .build();
             service = retrofit.create(InterpretService.class);
         }
@@ -47,7 +52,7 @@ public class YoudaoInterpreter implements Interpreter {
                 .subscribe(observer);
     }
 
-    private class Transformer implements Func1<YoudaoTranslateJsonBean, TranslateResult>{
+    private class Transformer implements Func1<YoudaoTranslateJsonBean, TranslateResult> {
 
         @Override
         public TranslateResult call(YoudaoTranslateJsonBean bean) {

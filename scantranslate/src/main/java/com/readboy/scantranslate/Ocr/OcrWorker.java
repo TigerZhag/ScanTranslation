@@ -40,7 +40,7 @@ public class OcrWorker {
         this.mode = MODE;
     }
 
-
+    private static final String TAG = "OcrWorker";
     public void initOcr(Action1<String> action1,Action1<Throwable> errAction){
         Observable.create(new Observable.OnSubscribe<String>() {
             @Override
@@ -48,15 +48,19 @@ public class OcrWorker {
                 //do the init work
                 if (FileUtil.dataIsExists(OCR_PATH_SYSTEM)){
                     // if system lib has the file ,use system lib to init
+                    Log.d(TAG, "ocr initing");
                     try {
                         baseApi.init(OCR_PATH_SYSTEM, "libchi_sim+libpinyin+libeng");
+                        subscriber.onNext("init success");
+                        subscriber.onCompleted();
                     } catch (IllegalArgumentException e) {
                         e.printStackTrace();
                     }
                 }else if (FileUtil.dataIsExists(OCR_PATH_DATA)){
                     // if own dir has the file ,use own lib to init
                     baseApi.init(OCR_PATH_DATA, "libchi_sim+libpinyin+libeng");
-
+                    subscriber.onNext("init success");
+                    subscriber.onCompleted();
                 }else {
                     // if both libs don't have the file ,throw exception
                     subscriber.onError(new Exception("没有找到语言包"));
@@ -75,11 +79,9 @@ public class OcrWorker {
                 baseApi.setImage(bitmap);
                 String text;
                 long start = System.currentTimeMillis();   //获取开始时间
-
                 text = baseApi.getUTF8TextWith(TessBaseAPI.ENG_ONLY);
                 long end = System.currentTimeMillis(); //获取结束时间
-                Log.e("getUTF8TextWith", "getUTF8TextWith() take " + (end - start) + "ms");
-
+                Log.e(TAG, "getUTF8TextWith() take " + (end - start) + "ms");
                 recycleBmp(bitmap);
                 if (text != null) {
                     char[] c = text.toCharArray();
@@ -93,6 +95,7 @@ public class OcrWorker {
                             }
                         }
                     }
+                    Log.d(TAG, "do ocr result :" + c);
                     subscriber.onNext(String.valueOf(c).trim().replace("\n", ""));
                 } else {
                     subscriber.onNext("");

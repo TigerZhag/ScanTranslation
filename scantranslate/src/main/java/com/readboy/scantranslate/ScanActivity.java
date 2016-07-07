@@ -10,15 +10,18 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.TextureView;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.readboy.scantranslate.Ocr.OcrWorker;
 import com.readboy.scantranslate.Translation.TranslateResult;
 import com.readboy.scantranslate.Translation.Translator;
 import com.readboy.scantranslate.Utils.HardwareUtil;
-import com.readboy.scantranslate.widght.ScannerView;
+import com.readboy.scantranslate.widght.ScannerOverlayView;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import rx.Observer;
 import rx.functions.Action1;
@@ -54,7 +57,7 @@ import rx.functions.Action1;
 public class ScanActivity extends AppCompatActivity {
     private static final String TAG = "ScanActivity";
 
-    private ScannerView scannerView;
+    private ScannerOverlayView scannerView;
     private FrameLayout previewFrame;
     private TextureView preview;
 
@@ -73,8 +76,8 @@ public class ScanActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scanner);
         initView();
-        initOcr();
         initCamera();
+        initOcr();
     }
 
     @Override
@@ -139,8 +142,10 @@ public class ScanActivity extends AppCompatActivity {
     }
 
     private void initView(){
-        scannerView = (ScannerView) findViewById(R.id.scanner);
+        scannerView = (ScannerOverlayView) findViewById(R.id.scanner);
         previewFrame = (FrameLayout) findViewById(R.id.scanner_previewframe);
+
+        TextView result = new TextView(this);
     }
 
     private void initCamera(){
@@ -160,7 +165,7 @@ public class ScanActivity extends AppCompatActivity {
                 bmOptions.inPurgeable = true;
                 bmOptions.inInputShareable = true;
                 Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length, bmOptions);
-                doOcr(scannerView.getCroppedImage(bmp));
+                doOcr(scannerView.getScanedImage(bmp));
                 camera.startPreview();
             }
         };
@@ -169,8 +174,10 @@ public class ScanActivity extends AppCompatActivity {
             @Override
             public void onAutoFocus(boolean success, Camera camera) {
                 if (success){
+                    Log.d(TAG, "onAutoFocus: success");
                     camera.takePicture(null,null,pictureCallback);
                 }else {
+                    takePicture();
                     Log.e(TAG, "onAutoFocus: failure");
                 }
             }
@@ -181,6 +188,7 @@ public class ScanActivity extends AppCompatActivity {
      * init Ocr
      */
     private void initOcr(){
+        Log.d(TAG, "initOcr: start");
         Action1<String> action1 = new Action1<String>() {
             @Override
             public void call(String s) {
@@ -202,7 +210,10 @@ public class ScanActivity extends AppCompatActivity {
      * take a picture and ocr it
      */
     private void takePicture() {
-        camera.autoFocus(focusCallback);
+        Log.d(TAG, "takePicture: start aotofocus");
+        if (camera != null){
+            camera.autoFocus(focusCallback);
+        }
     }
 
     /**
@@ -212,7 +223,7 @@ public class ScanActivity extends AppCompatActivity {
         Action1<String> ocrAction = new Action1<String>() {
             @Override
             public void call(String s) {
-                Log.d(TAG, "Ocr success ,result :" + s);
+                Log.d(TAG, "ocr success ,result :" + s);
                 translate(s);
             }
         };
@@ -224,6 +235,7 @@ public class ScanActivity extends AppCompatActivity {
      * @param query : the word should be translated
      */
     private void translate(String query){
+        Log.d(TAG, "translate: start");
         Observer<TranslateResult> observer = new Observer<TranslateResult>() {
             @Override
             public void onCompleted() {
@@ -237,12 +249,11 @@ public class ScanActivity extends AppCompatActivity {
 
             @Override
             public void onNext(TranslateResult translateResult) {
-                StringBuilder builder = new StringBuilder();
-                builder.append(translateResult.source).append("\n")
-                        .append(translateResult.phonetic).append("\n");
-                for (String mean : translateResult.mean) {
-                    builder.append(mean).append("\n");
-                }
+                List<String> results = new ArrayList<>();
+                results.add(translateResult.source + ":");
+                results.add("音标:" + translateResult.phonetic);
+                results.addAll(translateResult.mean);
+                scannerView.setResult(results);
             }
         };
         Translator.getInstance().translate(query,observer);

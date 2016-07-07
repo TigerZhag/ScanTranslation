@@ -32,7 +32,6 @@ public class BaiduInterpreter implements Interpreter {
     private static String fromLanguage = "en";
     private String targetLanguage = "zh";
 
-    private BaiduTranslateJsonBean baiduJsonBean;
     private InterpretService service;
 
     @Override
