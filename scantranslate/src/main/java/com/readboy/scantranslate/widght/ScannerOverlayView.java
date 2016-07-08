@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.View;
 
 import com.readboy.scantranslate.R;
@@ -49,7 +50,7 @@ public class ScannerOverlayView extends View{
     private void init() {
         //init the frame
         metrics = getResources().getDisplayMetrics();
-        int width = metrics.widthPixels / 3;
+        int width = metrics.widthPixels * 5 / 9;
         int height = width * 3 / 9;
         int leftOffset = (metrics.widthPixels - width) / 2 ;
         int topOffset = (metrics.heightPixels - height) / 4 ;
@@ -116,24 +117,28 @@ public class ScannerOverlayView extends View{
 
     private static final String TAG = "ScannerOverlayView";
 
-    public Bitmap getScanedImage(Bitmap tBitmap) {
-        final Rect displayedImageRect = ImageViewUtil.getBitmapRectCenterInside(tBitmap, this);
+    public Bitmap getScanedImage(Bitmap bitmap) {
+        //final Rect displayedImageRect = ImageViewUtil.getBitmapRectCenterInside(bitmap, this);
 
         // Get the scale factor between the actual Bitmap dimensions and the
         // displayed dimensions for width.
-        final float actualImageWidth = tBitmap.getWidth();
-        final float displayedImageWidth = displayedImageRect.width();
+        final float actualImageWidth = bitmap.getWidth();
+        final float displayedImageWidth = getWidth();
         final float scaleFactorWidth = actualImageWidth / displayedImageWidth;
 
         // Get the scale factor between the actual Bitmap dimensions and the
         // displayed dimensions for height.
-        final float actualImageHeight = tBitmap.getHeight();
-        final float displayedImageHeight = displayedImageRect.height();
+        final float actualImageHeight = bitmap.getHeight();
+        final float displayedImageHeight = getHeight();
         final float scaleFactorHeight = actualImageHeight / displayedImageHeight;
 
         // Get crop window position relative to the displayed image.
-        final float cropWindowX = frame.left - displayedImageRect.left;
-        final float cropWindowY = frame.top - displayedImageRect.top;
+        Log.d(TAG, "getScanedImage: displayedImageRect.left : " + getLeft());
+        Log.d(TAG, "getScanedImage: bitmapWidth:" + actualImageWidth);
+        Log.d(TAG, "getScanedImage: textureWidth:" + getWidth());
+        Log.d(TAG, "getScanedImage: scaleFactorWidth : " + scaleFactorWidth);
+        final float cropWindowX = frame.left;// - displayedImageRect.left;
+        final float cropWindowY = frame.top - getTop();
         final float cropWindowWidth = frame.width();
         final float cropWindowHeight = frame.height();
 
@@ -143,8 +148,11 @@ public class ScannerOverlayView extends View{
         final float actualCropWidth = cropWindowWidth * scaleFactorWidth;
         final float actualCropHeight = cropWindowHeight * scaleFactorHeight;
 
+        Log.d(TAG, "getScanedImage: frame left: " + frame.left);
+        Log.d(TAG, "getScanedImage: crop left" + actualCropX);
+
         // Crop the subset from the original Bitmap.
-        Bitmap croppedBitmap = Bitmap.createBitmap(tBitmap,
+        Bitmap croppedBitmap = Bitmap.createBitmap(bitmap,
                 (int) actualCropX,
                 (int) actualCropY,
                 (int) actualCropWidth,

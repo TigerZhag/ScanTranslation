@@ -71,7 +71,7 @@ public class OcrWorker {
           .subscribe(action1,errAction);
     }
 
-    public void doOcr(final Bitmap bitmap, Action1<String> action1){
+    public void doOcr(final Bitmap bitmap, Action1<String> action1, Action1<Throwable> errAction){
         Observable.create(new Observable.OnSubscribe<String>() {
             @Override
             public void call(Subscriber<? super String> subscriber) {
@@ -95,10 +95,11 @@ public class OcrWorker {
                             }
                         }
                     }
-                    Log.d(TAG, "do ocr result :" + c);
+                    Log.d(TAG, "do ocr result :" + String.valueOf(c).trim());
                     subscriber.onNext(String.valueOf(c).trim().replace("\n", ""));
+                    subscriber.onCompleted();
                 } else {
-                    subscriber.onNext("");
+                    subscriber.onError(new Throwable("请对准您要识别的单词"));
                 }
             }
         }).subscribeOn(Schedulers.computation())
