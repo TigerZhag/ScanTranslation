@@ -18,6 +18,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.TextView;
@@ -82,9 +83,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
 
     private Camera camera;
     private Camera.AutoFocusCallback focusCallback;
-    private Camera.PictureCallback pictureCallback;
-    private boolean isAutoFocusAble;
-
 
     private Handler handler;
     private OcrWorker ocrWorker = new OcrWorker();
@@ -94,6 +92,8 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
 
 
     private Button ok;
+
+    private String result;
 
     public static final String SCAN_MODE = "scan_mode";
     public static final int TRANSLATE_MODE = 0x101;
@@ -107,6 +107,8 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.activity_scanner);
         handler = new Handler();
 
@@ -159,7 +161,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             }
         }
         Camera.Parameters cameraParameters = camera.getParameters();
-        isAutoFocusAble = cameraParameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_AUTO);
         if (this.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE) {
             cameraParameters.set("orientation", "portrait"); //
             cameraParameters.set("rotation", 90); // 镜头角度转90度（默认摄像头是横拍）
@@ -204,8 +205,8 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
         if (camera != null) {
             camera.stopPreview();
             camera.release();
-            preview = null;
             camera = null;
+            preview = null;
         }
     }
 
@@ -233,6 +234,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
                 //Toast.makeText(ScanActivity.this, "send result to searchActivity", Toast.LENGTH_SHORT).show();
 //                takePicture();
                 ok.setVisibility(View.GONE);
+                // TODO: 16-7-11 handle the ocr result
                 finish();
             }
         });
@@ -245,30 +247,25 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             finish();
         }
 
-        //set camera paramter
-
-        pictureCallback = new Camera.PictureCallback() {
-            @Override
-            public void onPictureTaken(byte[] data, Camera camera) {
-                //拍照成功,裁剪
-                BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-                bmOptions.inPurgeable = true;
-                bmOptions.inInputShareable = true;
-                Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length, bmOptions);
-                doOcr(scannerView.getScanedImage(bmp));
-                camera.startPreview();
-            }
-        };
-
         focusCallback = new Camera.AutoFocusCallback() {
             @Override
             public void onAutoFocus(boolean success, Camera camera) {
                 if (success) {
                     Log.d(TAG, "onAutoFocus: success");
-                    doOcr(scannerView.getScanedImage(preview.getBitmap()));
-                    //camera.takePicture(null, null, pictureCallback);
+                    //doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (ScanActivity.this.camera != null) {
+                                ScanActivity.this.camera.autoFocus(focusCallback);
+                            }
+                        }
+                    },6000);
                 } else {
-                    takePicture();
+                    if (camera != null) {
+                        camera.autoFocus(focusCallback);
+                    }
+//                    takePicture();
                     Log.e(TAG, "onAutoFocus: failure");
                 }
             }
@@ -285,6 +282,14 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             public void call(String s) {
                 // start autoFocus to take picture
                 camera.autoFocus(focusCallback);
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (camera != null) {
+                            doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                        }
+                    }
+                },1000);
             }
         };
         Action1<Throwable> errAction = new Action1<Throwable>() {
@@ -389,9 +394,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     private void takePicture() {
         Log.d(TAG, "takePicture: start aotofocus");
         if (camera != null) {
-            if (camera != null) {
-                camera.autoFocus(focusCallback);
-            }
+            doOcr(scannerView.getScanedImage(preview.getBitmap()));
         }
     }
 
@@ -409,9 +412,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
                     List<String> result = new ArrayList<>();
                     result.add(s);
                     scannerView.setResult(result);
-                    if (ok.getVisibility() != View.VISIBLE) {
-                        ok.setVisibility(View.VISIBLE);
-                    }
                     takePicture();
                 }else {
                     //auto translate
@@ -423,14 +423,11 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             @Override
             public void call(Throwable throwable) {
                 Log.e(TAG, "ocr failure");
-                List<String> result = new ArrayList<>();
-                result.add("识别失败,请对准您要识别的单词");
-                scannerView.setResult(result);
                 takePicture();
             }
         };
-//        String filename = SystemClock.currentThreadTimeMillis() + "ocr.png";
-//        FileUtil.saveBitmap(bitmap, filename);
+
+        Log.d(TAG, "doOcr: start");
         ocrWorker.doOcr(bitmap, ocrAction, errAction);
     }
 
@@ -450,20 +447,22 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             @Override
             public void onError(Throwable e) {
                 takePicture();
-                List<String> result = new ArrayList<>();
-                result.add("翻译失败,请对准您要识别的单词");
-                scannerView.setResult(result);
+//                List<String> result = new ArrayList<>();
+//                result.add("翻译失败,请对准您要识别的单词");
+//                scannerView.setResult(result);
                 Log.d(TAG, "translate onError: " + e.getMessage());
             }
 
             @Override
             public void onNext(TranslateResult translateResult) {
                 Log.d(TAG, "translate success : " + translateResult.source);
+                result = translateResult.source;
                 List<String> results = new ArrayList<>();
                 results.add(translateResult.source + ":");
                 results.add("音标:" + translateResult.phonetic);
                 results.addAll(translateResult.mean);
                 scannerView.setResult(results);
+                ok.setVisibility(View.VISIBLE);
                 takePicture();
             }
         };

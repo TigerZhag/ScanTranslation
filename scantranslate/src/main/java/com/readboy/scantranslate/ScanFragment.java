@@ -7,10 +7,12 @@ import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,11 +24,18 @@ import com.readboy.scantranslate.Ocr.OcrWorker;
 import com.readboy.scantranslate.Utils.HardwareUtil;
 import com.readboy.scantranslate.widght.ScannerOverlayView;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import rx.Observable;
+import rx.Subscriber;
+import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
+import rx.schedulers.Schedulers;
 
 /**
  * @author Zhang shixin
@@ -72,6 +81,8 @@ public class ScanFragment extends Fragment {
     private String result;
     private OcrWorker ocrWorker = new OcrWorker();
 
+    private Handler handler;
+
     public void setOkListener(View.OnClickListener listener){
         this.okListener = listener;
     }
@@ -85,6 +96,8 @@ public class ScanFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = LayoutInflater.from(getActivity()).inflate(R.layout.activity_scanner,null,false);
+
+        handler = new Handler();
         initView(view);
         initCamera();
         initOcr();
@@ -100,7 +113,15 @@ public class ScanFragment extends Fragment {
             @Override
             public void call(String s) {
                 // start autoFocus to take picture
-                takePicture();
+                camera.autoFocus(focusCallback);
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (camera != null) {
+                            doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                        }
+                    }
+                },1000);
             }
         };
         Action1<Throwable> errAction = new Action1<Throwable>() {
@@ -110,7 +131,93 @@ public class ScanFragment extends Fragment {
                 Log.e(TAG, "init ocr failure :" + throwable.getMessage());
             }
         };
-        ocrWorker.initOcr(action1, errAction);
+        if (!isExist()){
+            deepFile("tessdata");
+        }else {
+            ocrWorker.initOcr(action1, errAction);
+        }
+    }
+
+    private void deepFile(final String path) {
+        Log.d(TAG, "deepFile: ");
+        Subscriber<String> subscriber = new Subscriber<String>() {
+            @Override
+            public void onCompleted() {
+
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                Log.e(TAG, "onError: init failure");
+            }
+
+            @Override
+            public void onNext(String s) {
+                initOcr();
+            }
+        };
+        Observable.create(new Observable.OnSubscribe<String>() {
+            @Override
+            public void call(Subscriber<? super String> subscriber) {
+                try {
+                    copyFile(path);
+                    subscriber.onNext("init success");
+                    subscriber.onCompleted();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    subscriber.onError(e);
+                }
+            }
+        }).subscribeOn(Schedulers.computation())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(subscriber);
+
+
+    }
+
+    private void copyFile(String path) throws IOException {
+        Log.d(TAG, "copyFile: ");
+        String str[] = getActivity().getAssets().list(path);
+        if (str.length > 0) {//如果是目录
+            File file = new File(ScanActivity.filePath + path);
+            file.mkdirs();
+            Log.d(TAG, "copyFile: 2");
+            for (String string : str) {
+                path = path + "/" + string;
+                System.out.println("lilongc:\t" + path);
+                // textView.setText(textView.getText()+"\t"+path+"\t");
+                copyFile(path);
+                path = path.substring(0, path.lastIndexOf('/'));
+            }
+        } else {//如果是文件
+            Log.d(TAG, "copyFile: " + path);
+            File file = new File(path);
+            if(!file.exists()) file.mkdir();
+            InputStream is = getActivity().getAssets().open(path);
+            FileOutputStream fos = new FileOutputStream(new File(ScanActivity.filePath
+                    + path));
+            byte[] buffer = new byte[1024];
+            int count = 0;
+            while (true) {
+                count++;
+                int len = is.read(buffer);
+                if (len == -1) {
+                    break;
+                }
+                fos.write(buffer, 0, len);
+            }
+            is.close();
+            fos.close();
+        }
+    }
+
+    private boolean isExist() {
+        File file = new File(ScanActivity.filePath + "tessdata" + File.separator + "eng.traineddata");
+        if (file.exists()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @Override
@@ -154,7 +261,8 @@ public class ScanFragment extends Fragment {
     private void takePicture() {
         Log.d(TAG, "takePicture: start aotofocus");
         if (camera != null){
-            camera.autoFocus(focusCallback);
+            //camera.autoFocus(focusCallback);
+            doOcr(scannerView.getScanedImage(preview.getBitmap()));
         }
     }
 
@@ -170,6 +278,19 @@ public class ScanFragment extends Fragment {
             previewFrame.addView(preview);
         }
 
+        scannerView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (camera != null){
+                    camera.autoFocus(new Camera.AutoFocusCallback() {
+                        @Override
+                        public void onAutoFocus(boolean success, Camera camera) {
+
+                        }
+                    });
+                }
+            }
+        });
         ok.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -185,29 +306,25 @@ public class ScanFragment extends Fragment {
             getActivity().finish();
         }
 
-        //set camera paramter
-
-        pictureCallback = new Camera.PictureCallback() {
-            @Override
-            public void onPictureTaken(byte[] data, Camera camera) {
-                //拍照成功,裁剪
-                BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-                bmOptions.inPurgeable = true;
-                bmOptions.inInputShareable = true;
-                Bitmap bmp = BitmapFactory.decodeByteArray(data, 0, data.length, bmOptions);
-                doOcr(scannerView.getScanedImage(bmp));
-                camera.startPreview();
-            }
-        };
-
         focusCallback = new Camera.AutoFocusCallback() {
             @Override
             public void onAutoFocus(boolean success, Camera camera) {
-                if (success){
+                if (success) {
                     Log.d(TAG, "onAutoFocus: success");
-                    camera.takePicture(null,null,pictureCallback);
-                }else {
-                    takePicture();
+                    //doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (ScanFragment.this.camera != null) {
+                                ScanFragment.this.camera.autoFocus(focusCallback);
+                            }
+                        }
+                    },6000);
+                } else {
+                    if (camera != null) {
+                        camera.autoFocus(focusCallback);
+                    }
+//                    takePicture();
                     Log.e(TAG, "onAutoFocus: failure");
                 }
             }

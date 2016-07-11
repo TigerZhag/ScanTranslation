@@ -103,7 +103,6 @@ public class OcrWorker {
                     }
                     Log.d(TAG, "do ocr result :" + String.valueOf(c).trim());
                     subscriber.onNext(String.valueOf(c).trim().replace("\n", ""));
-                    subscriber.onCompleted();
                 } else {
                     subscriber.onError(new Throwable("请对准您要识别的单词"));
                 }
