@@ -50,10 +50,10 @@ public class Scale {
      * type (fill, stretch, etc.). Returns a scaled image or a clone of the Pix
      * if no scaling is required.
      *
-     * @param pixs
-     * @param width
-     * @param height
-     * @param type
+     * @param pixs Source pix image
+     * @param width The desired width to scale to
+     * @param height The desired height to scale to
+     * @param type The desired scaling type
      * @return a scaled image or a clone of the Pix if no scaling is required
      */
     public static Pix scaleToSize(Pix pixs, int width, int height, ScaleType type) {
@@ -72,10 +72,12 @@ public class Scale {
                 break;
             case FIT:
                 scaleX = Math.min(scaleX, scaleY);
+                //noinspection SuspiciousNameCombination
                 scaleY = scaleX;
                 break;
             case FIT_SHRINK:
                 scaleX = Math.min(1.0f, Math.min(scaleX, scaleY));
+                //noinspection SuspiciousNameCombination
                 scaleY = scaleX;
                 break;
         }
@@ -96,6 +98,23 @@ public class Scale {
     }
 
     /**
+     * Scales the Pix to the specified scale without sharpening.
+     *
+     * @param pixs the source Pix (1, 2, 4, 8, 16 and 32 bpp)
+     * @param scale scaling factor for both X and Y
+     * @return a Pix scaled while maintaining its aspect ratio
+     */
+    public static Pix scaleWithoutSharpening(Pix pixs, float scale) {
+        if (pixs == null)
+            throw new IllegalArgumentException("Source pix must be non-null");
+        if (scale <= 0.0f)
+            throw new IllegalArgumentException("Scaling factor must be positive");
+
+        return new Pix(nativeScaleGeneral(pixs.getNativePix(), scale, scale,
+                0f, 0));
+    }
+
+    /**
      * Scales the Pix to specified x and y scale. If no scaling is required,
      * returns a clone of the source Pix.
      *
@@ -112,7 +131,7 @@ public class Scale {
         if (scaleY <= 0.0f)
             throw new IllegalArgumentException("Y scaling factor must be positive");
 
-        int nativePix = nativeScale(pixs.mNativePix, scaleX, scaleY);
+        long nativePix = nativeScale(pixs.getNativePix(), scaleX, scaleY);
 
         if (nativePix == 0)
             throw new RuntimeException("Failed to natively scale pix");
@@ -124,5 +143,7 @@ public class Scale {
     // * NATIVE CODE *
     // ***************
 
-    private static native int nativeScale(int nativePix, float scaleX, float scaleY);
+    private static native long nativeScale(long nativePix, float scaleX, float scaleY);
+    private static native long nativeScaleGeneral(long nativePix, float scaleX, float scaleY, float sharpfract, int sharpwidth);
+
 }

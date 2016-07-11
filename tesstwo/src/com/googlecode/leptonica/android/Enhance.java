@@ -21,11 +21,31 @@ package com.googlecode.leptonica.android;
  *
  * @author alanv@google.com (Alan Viverette)
  */
+@SuppressWarnings("WeakerAccess")
 public class Enhance {
     static {
         System.loadLibrary("lept");
     }
 
+    // Unsharp masking constants
+    
+    public final static int DEFAULT_UNSHARP_HALFWIDTH = 1;
+    
+    public final static float DEFAULT_UNSHARP_FRACTION = 0.3f;
+    
+    /**
+     * Performs unsharp masking (edge enhancement) using default values.
+     * 
+     * @see #unsharpMasking(Pix, int, float)
+     * 
+     * @param pixs Source image
+     * @return an edge-enhanced Pix image or copy if no enhancement requested
+     */
+    public static Pix unsharpMasking(Pix pixs) {
+        return unsharpMasking(pixs, DEFAULT_UNSHARP_HALFWIDTH, 
+                DEFAULT_UNSHARP_FRACTION);
+    }
+    
     /**
      * Performs unsharp masking (edge enhancement).
      * <p>
@@ -38,6 +58,7 @@ public class Enhance {
      * &lt; <code>fract</code> &lt; 0.7</li>
      * </ul>
      *
+     * @param pixs The source image
      * @param halfwidth The half-width of the smoothing filter.
      * @param fraction The fraction of edge to be added back into the source
      *            image.
@@ -47,7 +68,8 @@ public class Enhance {
         if (pixs == null)
             throw new IllegalArgumentException("Source pix must be non-null");
 
-        int nativePix = nativeUnsharpMasking(pixs.mNativePix, halfwidth, fraction);
+        long nativePix = nativeUnsharpMasking(pixs.getNativePix(), halfwidth, 
+                fraction);
 
         if (nativePix == 0) {
             throw new OutOfMemoryError();
@@ -60,5 +82,5 @@ public class Enhance {
     // * NATIVE CODE *
     // ***************
 
-    private static native int nativeUnsharpMasking(int nativePix, int halfwidth, float fract);
+    private static native long nativeUnsharpMasking(long nativePix, int halfwidth, float fract);
 }

@@ -16,15 +16,21 @@
 
 package com.googlecode.leptonica.android;
 
+import android.graphics.Rect;
+import android.util.Log;
+
 /**
  * Wrapper for Leptonica's native BOX.
  *
  * @author alanv@google.com (Alan Viverette)
  */
+@SuppressWarnings("WeakerAccess")
 public class Box {
     static {
         System.loadLibrary("lept");
     }
+
+    private static final String TAG = Box.class.getSimpleName();
 
     /** The index of the X coordinate within the geometry array. */
     public static final int INDEX_X = 0;
@@ -42,7 +48,7 @@ public class Box {
      * A pointer to the native Box object. This is used internally by native
      * code.
      */
-    final int mNativeBox;
+    private final long mNativeBox;
 
     private boolean mRecycled = false;
 
@@ -51,7 +57,7 @@ public class Box {
      *
      * @param nativeBox A pointer to the native BOX.
      */
-    Box(int nativeBox) {
+    Box(long nativeBox) {
         mNativeBox = nativeBox;
         mRecycled = false;
     }
@@ -69,23 +75,38 @@ public class Box {
         if (x < 0 || y < 0 || w < 0 || h < 0) {
             throw new IllegalArgumentException("All box dimensions must be non-negative");
         }
-        
-        int nativeBox = nativeCreate(x, y, w, h);
+
+        long nativeBox = nativeCreate(x, y, w, h);
 
         if (nativeBox == 0) {
             throw new OutOfMemoryError();
         }
-        
+
         mNativeBox = nativeBox;
         mRecycled = false;
     }
-    
+
+    /**
+     * Returns a pointer to the native Box object.
+     *
+     * @return a pointer to the native Box object
+     */
+    public long getNativeBox() {
+        if (mRecycled)
+            throw new IllegalStateException();
+
+        return mNativeBox;
+    }
+
     /**
      * Returns the box's x-coordinate in pixels.
      * 
      * @return The box's x-coordinate in pixels.
      */
     public int getX() {
+        if (mRecycled)
+            throw new IllegalStateException();
+
         return nativeGetX(mNativeBox);
     }
 
@@ -95,6 +116,9 @@ public class Box {
      * @return The box's y-coordinate in pixels.
      */
     public int getY() {
+        if (mRecycled)
+            throw new IllegalStateException();
+
         return nativeGetY(mNativeBox);
     }
 
@@ -104,6 +128,9 @@ public class Box {
      * @return The box's width in pixels.
      */
     public int getWidth() {
+        if (mRecycled)
+            throw new IllegalStateException();
+
         return nativeGetWidth(mNativeBox);
     }
 
@@ -113,14 +140,32 @@ public class Box {
      * @return The box's height in pixels.
      */
     public int getHeight() {
+        if (mRecycled)
+            throw new IllegalStateException();
+
         return nativeGetHeight(mNativeBox);
+    }
+
+    /**
+     * Returns an {@link android.graphics.Rect} containing the coordinates
+     * of this box.
+     *
+     * @return a rect representing the box
+     */
+    public Rect getRect() {
+        int[] geometry = getGeometry();
+        int left = geometry[Box.INDEX_X];
+        int top = geometry[Box.INDEX_Y];
+        int right = left + geometry[Box.INDEX_W];
+        int bottom = top + geometry[Box.INDEX_H];
+        return new Rect(left, top, right, bottom);
     }
 
     /**
      * Returns an array containing the coordinates of this box. See INDEX_*
      * constants for indices.
      *
-     * @return an array of box oordinates
+     * @return an array of box coordinates
      */
     public int[] getGeometry() {
         int[] geometry = new int[4];
@@ -140,6 +185,9 @@ public class Box {
      * @return <code>true</code> on success
      */
     public boolean getGeometry(int[] geometry) {
+        if (mRecycled)
+            throw new IllegalStateException();
+
         if (geometry.length < 4) {
             throw new IllegalArgumentException("Geometry array must be at least 4 elements long");
         }
@@ -160,20 +208,25 @@ public class Box {
 
     @Override
     protected void finalize() throws Throwable {
-        recycle();
-
-        super.finalize();
+        try {
+            if (!mRecycled) {
+                Log.w(TAG, "Box was not terminated using recycle()");
+                recycle();
+            }
+        } finally {
+            super.finalize();
+        }
     }
 
     // ***************
     // * NATIVE CODE *
     // ***************
 
-    private static native int nativeCreate(int x, int y, int w, int h);
-    private static native int nativeGetX(int nativeBox);
-    private static native int nativeGetY(int nativeBox);
-    private static native int nativeGetWidth(int nativeBox);
-    private static native int nativeGetHeight(int nativeBox);
-    private static native void nativeDestroy(int nativeBox);
-    private static native boolean nativeGetGeometry(int nativeBox, int[] geometry);
+    private static native long nativeCreate(int x, int y, int w, int h);
+    private static native int nativeGetX(long nativeBox);
+    private static native int nativeGetY(long nativeBox);
+    private static native int nativeGetWidth(long nativeBox);
+    private static native int nativeGetHeight(long nativeBox);
+    private static native void nativeDestroy(long nativeBox);
+    private static native boolean nativeGetGeometry(long nativeBox, int[] geometry);
 }

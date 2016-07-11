@@ -9,7 +9,10 @@ import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
 import android.os.SystemClock;
+import android.support.annotation.MainThread;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -27,12 +30,20 @@ import com.readboy.scantranslate.Utils.FileUtil;
 import com.readboy.scantranslate.Utils.HardwareUtil;
 import com.readboy.scantranslate.widght.ScannerOverlayView;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import rx.Observable;
 import rx.Observer;
+import rx.Subscriber;
+import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
+import rx.schedulers.Schedulers;
 
 
 /**
@@ -75,7 +86,12 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     private boolean isAutoFocusAble;
 
 
+    private Handler handler;
     private OcrWorker ocrWorker = new OcrWorker();
+    public static final String filePath = Environment.getExternalStorageDirectory().toString() + File.separator +
+            "Android" + File.separator + "data" + File.separator + "com.readboy.scantranslation" +
+            File.separator + "files" + File.separator  + "mounted" + File.separator;
+
 
     private Button ok;
 
@@ -92,6 +108,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scanner);
+        handler = new Handler();
 
         initMode();
         initView();
@@ -102,7 +119,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     private void initMode() {
         if (getIntent().getIntExtra(SCAN_MODE,OCR_MODE) == TRANSLATE_MODE){
             //check internet connection
-            if (HardwareUtil.isConnect(this)){
+            if (!HardwareUtil.isConnect(this)){
                 new AlertDialog.Builder(this)
                         .setTitle("网络错误")
                         .setMessage("网络连接失败，请确认网络连接")
@@ -123,7 +140,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onResume() {
         super.onResume();
-        //todo init camera
         //openCamera();
         Log.d(TAG, "onResume: ");
         if (preview == null) {
@@ -180,7 +196,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onPause() {
         super.onPause();
-        // TODO: 16-7-6  release camera
         releaseCamera();
         Log.d(TAG, "onPause: ");
     }
@@ -197,7 +212,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // TODO: 16-7-6 release Ocr resource
         ocrWorker.release();
     }
 
@@ -216,11 +230,10 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
         ok.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // TODO: 16-7-8 send result to searchActivity
                 //Toast.makeText(ScanActivity.this, "send result to searchActivity", Toast.LENGTH_SHORT).show();
-                takePicture();
+//                takePicture();
                 ok.setVisibility(View.GONE);
-                //finish();
+                finish();
             }
         });
     }
@@ -271,7 +284,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             @Override
             public void call(String s) {
                 // start autoFocus to take picture
-                takePicture();
+                camera.autoFocus(focusCallback);
             }
         };
         Action1<Throwable> errAction = new Action1<Throwable>() {
@@ -281,7 +294,93 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
                 Log.e(TAG, "init ocr failure :" + throwable.getMessage());
             }
         };
-        ocrWorker.initOcr(action1, errAction);
+        if (!isExist()){
+            deepFile("tessdata");
+        }else {
+            ocrWorker.initOcr(action1, errAction);
+        }
+    }
+
+    public void deepFile(final String path) {
+        Log.d(TAG, "deepFile: ");
+        Subscriber<String> subscriber = new Subscriber<String>() {
+            @Override
+            public void onCompleted() {
+
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                Log.e(TAG, "onError: init failure");
+            }
+
+            @Override
+            public void onNext(String s) {
+                initOcr();
+            }
+        };
+        Observable.create(new Observable.OnSubscribe<String>() {
+            @Override
+            public void call(Subscriber<? super String> subscriber) {
+                try {
+                    copyFile(path);
+                    subscriber.onNext("init success");
+                    subscriber.onCompleted();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    subscriber.onError(e);
+                }
+            }
+        }).subscribeOn(Schedulers.computation())
+          .observeOn(AndroidSchedulers.mainThread())
+          .subscribe(subscriber);
+
+
+    }
+
+    private void copyFile(String path) throws IOException {
+        Log.d(TAG, "copyFile: ");
+        String str[] = getAssets().list(path);
+        if (str.length > 0) {//如果是目录
+            File file = new File(filePath + path);
+            file.mkdirs();
+            Log.d(TAG, "copyFile: 2");
+            for (String string : str) {
+                path = path + "/" + string;
+                System.out.println("lilongc:\t" + path);
+                // textView.setText(textView.getText()+"\t"+path+"\t");
+                copyFile(path);
+                path = path.substring(0, path.lastIndexOf('/'));
+            }
+        } else {//如果是文件
+            Log.d(TAG, "copyFile: " + path);
+            File file = new File(path);
+            if(!file.exists()) file.mkdir();
+            InputStream is = getAssets().open(path);
+            FileOutputStream fos = new FileOutputStream(new File(filePath
+                    + path));
+            byte[] buffer = new byte[1024];
+            int count = 0;
+            while (true) {
+                count++;
+                int len = is.read(buffer);
+                if (len == -1) {
+                    break;
+                }
+                fos.write(buffer, 0, len);
+            }
+            is.close();
+            fos.close();
+        }
+    }
+
+    private boolean isExist() {
+        File file = new File(filePath + "tessdata" + File.separator + "eng.traineddata");
+        if (file.exists()) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -290,7 +389,9 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     private void takePicture() {
         Log.d(TAG, "takePicture: start aotofocus");
         if (camera != null) {
-            camera.autoFocus(focusCallback);
+            if (camera != null) {
+                camera.autoFocus(focusCallback);
+            }
         }
     }
 

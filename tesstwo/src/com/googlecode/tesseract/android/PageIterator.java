@@ -16,18 +16,20 @@
 
 package com.googlecode.tesseract.android;
 
+import android.graphics.Rect;
+
 import com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel;
 
 public class PageIterator {
     static {
         System.loadLibrary("lept");
-        System.loadLibrary("tess");
+        System.loadLibrary("tess_dream");
     }
 
     /** Pointer to native page iterator. */
-    private final int mNativePageIterator;
+    private final long mNativePageIterator;
 
-    /* package */PageIterator(int nativePageIterator) {
+    /* package */PageIterator(long nativePageIterator) {
         mNativePageIterator = nativePageIterator;
     }
 
@@ -42,17 +44,17 @@ public class PageIterator {
      * Moves to the start of the next object at the given level in the page
      * hierarchy, and returns false if the end of the page was reached.
      * <p>
-     * NOTE that {@link com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel#RIL_SYMBOL} will skip non-text blocks,
-     * but all other {@link com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel} level values will visit each
+     * NOTE that {@link PageIteratorLevel#RIL_SYMBOL} will skip non-text blocks,
+     * but all other {@link PageIteratorLevel} level values will visit each
      * non-text block once. Think of non text blocks as containing a single
      * para, with a single line, with a single imaginary word.
      * <p>
-     * Calls to {@link #next} with different levels may be freely intermixed.
+     * Calls to this method with different levels may be freely intermixed.
      * <p>
      * This function iterates words in right-to-left scripts correctly, if the
      * appropriate language has been loaded into Tesseract.
      *
-     * @param level the page iterator level. See {@link com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel}.
+     * @param level the page iterator level. See {@link PageIteratorLevel}.
      * @return {@code false} if the end of the page was reached, {@code true}
      *         otherwise.
      */
@@ -62,32 +64,48 @@ public class PageIterator {
 
     /**
      * Get bounding box: x, y, w, h
-     * 
+     * <p>
      * ============= Accessing data ==============.
+     * <p>
      * Coordinate system:
-     * Integer coordinates are at the cracks between the pixels.
-     * The top-left corner of the top-left pixel in the image is at (0,0).
-     * The bottom-right corner of the bottom-right pixel in the image is at
+     * <p><ul>
+     * <li> Integer coordinates are at the cracks between the pixels.
+     * <li> The top-left corner of the top-left pixel in the image is at (0,0).
+     * <li> The bottom-right corner of the bottom-right pixel in the image is at
      * (width, height).
-     * Every bounding box goes from the top-left of the top-left contained
+     * <li> Every bounding box goes from the top-left of the top-left contained
      * pixel to the bottom-right of the bottom-right contained pixel, so
      * the bounding box of the single top-left pixel in the image is:
      * (0,0)->(1,1).
-     * If an image rectangle has been set in the API, then returned coordinates
+     * <li> If an image rectangle has been set in the API, then returned coordinates
      * relate to the original (full) image, rather than the rectangle.
-     *
+     * </ul><p>
      * Returns the bounding rectangle of the current object at the given level.
      * See comment on coordinate system above.
+     * <p>
      * The returned bounding box may clip foreground pixels from a grey image.
      * 
-     * @param level the page iterator level. See {@link com.googlecode.tesseract.android.TessBaseAPI.PageIteratorLevel}.
+     * @param level the page iterator level. See {@link PageIteratorLevel}.
      * @return the bounding rectangle of the current object at the given level
      */
-    public int[] getBoundingBox(int level){
+    public int[] getBoundingBox(int level) {
     	return nativeBoundingBox(mNativePageIterator, level);
     }
     
-    private static native void nativeBegin(int nativeIterator);
-    private static native boolean nativeNext(int nativeIterator, int level);
-    private static native int[] nativeBoundingBox(int nativeIterator, int level);
+    /**
+     * Get a bounding box as an Android Rect.
+     * 
+     * @see #getBoundingBox(int)
+     * 
+     * @param level the page iterator level. See {@link PageIteratorLevel}.
+     * @return the bounding rectangle of the current object at the given level
+     */
+    public Rect getBoundingRect(int level) {
+        int[] box = getBoundingBox(level);
+        return new Rect(box[0], box[1], box[2], box[3]);
+    }
+    
+    private static native void nativeBegin(long nativeIterator);
+    private static native boolean nativeNext(long nativeIterator, int level);
+    private static native int[] nativeBoundingBox(long nativeIterator, int level);
 }

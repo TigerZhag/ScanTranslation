@@ -51,7 +51,7 @@ public class ScannerOverlayView extends View{
         //init the frame
         metrics = getResources().getDisplayMetrics();
         int width = metrics.widthPixels * 5 / 9;
-        int height = width * 3 / 9;
+        int height = width * 2 / 9;
         int leftOffset = (metrics.widthPixels - width) / 2 ;
         int topOffset = (metrics.heightPixels - height) / 4 ;
 
