@@ -3,11 +3,16 @@ package com.readboy.scantranslate;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.ImageFormat;
+import android.graphics.Paint;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -16,11 +21,15 @@ import android.view.MotionEvent;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import com.readboy.scantranslate.Ocr.OcrWorker;
+import com.readboy.scantranslate.Translation.TranslateResult;
+import com.readboy.scantranslate.Translation.Translator;
+import com.readboy.scantranslate.Utils.FileUtil;
 import com.readboy.scantranslate.Utils.HardwareUtil;
 import com.readboy.scantranslate.widght.ScannerOverlayView;
 
@@ -32,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import rx.Observable;
+import rx.Observer;
 import rx.Subscriber;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
@@ -96,12 +106,12 @@ public class ScanFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = LayoutInflater.from(getActivity()).inflate(R.layout.activity_scanner,null,false);
-
+        getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         handler = new Handler();
         initView(view);
         initCamera();
         initOcr();
-        return super.onCreateView(inflater, container, savedInstanceState);
+        return view;
     }
 
     /**
@@ -118,7 +128,7 @@ public class ScanFragment extends Fragment {
                     @Override
                     public void run() {
                         if (camera != null) {
-                            doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                            doOcr(getGrayBitmap(scannerView.getScanedImage(preview.getBitmap())));
                         }
                     }
                 },1000);
@@ -136,6 +146,25 @@ public class ScanFragment extends Fragment {
         }else {
             ocrWorker.initOcr(action1, errAction);
         }
+    }
+
+    public Bitmap getGrayBitmap(Bitmap mBitmap) {
+        Bitmap mGrayBitmap = Bitmap.createBitmap(mBitmap.getWidth(), mBitmap.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas mCanvas = new Canvas(mGrayBitmap);
+        Paint mPaint = new Paint();
+
+        //创建颜色变换矩阵
+        ColorMatrix mColorMatrix = new ColorMatrix();
+        //设置灰度影响范围
+        mColorMatrix.setSaturation(0);
+        //创建颜色过滤矩阵
+        ColorMatrixColorFilter mColorFilter = new ColorMatrixColorFilter(mColorMatrix);
+        //设置画笔的颜色过滤矩阵
+        mPaint.setColorFilter(mColorFilter);
+        //使用处理后的画笔绘制图像
+        mCanvas.drawBitmap(mBitmap, 0, 0, mPaint);
+//        FileUtil.saveBitmap(mGrayBitmap, SystemClock.currentThreadTimeMillis() + "ocr.jpg");
+        return mGrayBitmap;
     }
 
     private void deepFile(final String path) {
@@ -262,7 +291,7 @@ public class ScanFragment extends Fragment {
         Log.d(TAG, "takePicture: start aotofocus");
         if (camera != null){
             //camera.autoFocus(focusCallback);
-            doOcr(scannerView.getScanedImage(preview.getBitmap()));
+            doOcr(getGrayBitmap(scannerView.getScanedImage(preview.getBitmap())));
         }
     }
 
@@ -319,7 +348,7 @@ public class ScanFragment extends Fragment {
                                 ScanFragment.this.camera.autoFocus(focusCallback);
                             }
                         }
-                    },6000);
+                    },5000);
                 } else {
                     if (camera != null) {
                         camera.autoFocus(focusCallback);
@@ -339,15 +368,7 @@ public class ScanFragment extends Fragment {
             @Override
             public void call(String s) {
                 Log.d(TAG, "ocr success ,result :" + s);
-                //just ocr
-                ScanFragment.this.result = s;
-                List<String> result = new ArrayList<>();
-                result.add(s);
-                scannerView.setResult(result);
-                if (ok.getVisibility() != View.VISIBLE) {
-                    ok.setVisibility(View.VISIBLE);
-                }
-                takePicture();
+                translate(s.toLowerCase());
             }
         };
         Action1<Throwable> errAction = new Action1<Throwable>() {
@@ -358,6 +379,44 @@ public class ScanFragment extends Fragment {
             }
         };
         ocrWorker.doOcr(bitmap, ocrAction, errAction);
+    }
+
+    /**
+     * do translate and show the result
+     *
+     * @param query : the word should be translated
+     */
+    private void translate(String query) {
+        Log.d(TAG, "translate: start");
+        Observer<TranslateResult> observer = new Observer<TranslateResult>() {
+            @Override
+            public void onCompleted() {
+
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                takePicture();
+//                List<String> result = new ArrayList<>();
+//                result.add("翻译失败,请对准您要识别的单词");
+//                scannerView.setResult(result);
+                Log.d(TAG, "translate onError: " + e.getMessage());
+            }
+
+            @Override
+            public void onNext(TranslateResult translateResult) {
+                Log.d(TAG, "translate success : " + translateResult.source);
+                result = translateResult.source;
+                List<String> results = new ArrayList<>();
+                results.add(translateResult.source + ":");
+                results.add("音标:" + translateResult.phonetic);
+                results.addAll(translateResult.mean);
+                scannerView.setResult(results);
+                ok.setVisibility(View.VISIBLE);
+                takePicture();
+            }
+        };
+        Translator.getInstance().translate(query, observer);
     }
 
     private void showOK(String result) {

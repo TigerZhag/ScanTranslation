@@ -7,5 +7,5 @@ import rx.Observer;
  * @date 16-7-5.
  */
 public interface Interpreter {
-    public void translate(String query, Observer<TranslateResult> observer);
+    void translate(String query, Observer<TranslateResult> observer);
 }

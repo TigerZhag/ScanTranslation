@@ -260,7 +260,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
                                 ScanActivity.this.camera.autoFocus(focusCallback);
                             }
                         }
-                    },6000);
+                    },5000);
                 } else {
                     if (camera != null) {
                         camera.autoFocus(focusCallback);
@@ -281,6 +281,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             @Override
             public void call(String s) {
                 // start autoFocus to take picture
+                Log.d(TAG, "ocr inited");
                 camera.autoFocus(focusCallback);
                 handler.postDelayed(new Runnable() {
                     @Override
@@ -405,7 +406,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
         Action1<String> ocrAction = new Action1<String>() {
             @Override
             public void call(String s) {
-                Log.d(TAG, "ocr success ,result :" + s);
                 //translate(s);
                 if (MODE == OCR_MODE){
                     //just ocr
@@ -478,6 +478,17 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             if (camera != null) {
                 camera.setPreviewTexture(surface);
                 camera.startPreview();
+                if (OcrWorker.ocrIsInit){
+                    camera.autoFocus(focusCallback);
+                    handler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (camera != null) {
+                                doOcr(scannerView.getScanedImage(preview.getBitmap()));
+                            }
+                        }
+                    },1000);
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();

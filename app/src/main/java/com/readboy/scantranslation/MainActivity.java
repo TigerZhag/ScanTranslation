@@ -20,7 +20,6 @@ public class MainActivity extends FragmentActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         Button button = (Button) findViewById(R.id.start_ocr);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
