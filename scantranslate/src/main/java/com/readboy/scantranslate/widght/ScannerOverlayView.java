@@ -91,14 +91,13 @@ public class ScannerOverlayView extends View{
         //draw the text
         paint.setColor(getResources().getColor(R.color.scanner_result));
         paint.setTextSize(textSize * metrics.density);
-        if (result.size() == 0){
-            paint.setAlpha(0x40);
-        }else {
+        if (result.size() > 0){
             paint.setAlpha(0xFF);
             int texttop = (int) (frame.bottom + textPaddingTop * metrics.density);
             Rect rect = new Rect();
             List<String> temp = new ArrayList<>();
             for (String text : result) {
+                if (text == null) break;
                 int times = (int) (Math.floor(paint.measureText(text,0,text.length()) / getWidth()) + 1);
                 if (times == 1) temp.add(text);
                 else cutString(text,times,temp);

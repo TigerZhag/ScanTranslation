@@ -1,9 +1,7 @@
 package com.readboy.scantranslate;
 
-import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
@@ -13,7 +11,6 @@ import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -34,7 +31,6 @@ import android.widget.Toast;
 import com.readboy.scantranslate.Ocr.OcrWorker;
 import com.readboy.scantranslate.Translation.TranslateResult;
 import com.readboy.scantranslate.Translation.Translator;
-import com.readboy.scantranslate.Utils.FileUtil;
 import com.readboy.scantranslate.Utils.HardwareUtil;
 import com.readboy.scantranslate.widght.ScannerOverlayView;
 
@@ -44,10 +40,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ThreadPoolExecutor;
 
 import rx.Observable;
-import rx.Observer;
 import rx.Subscriber;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
@@ -313,9 +307,13 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
                 if (event.getAction() == MotionEvent.ACTION_DOWN){
                     //press the button
                     Log.d(TAG, "onGenericMotion: press");
+                    if(too_temp) {
+                        Toast.makeText(getActivity(), R.string.press_toosoon, Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
                     ocrrrrStop = false;
                     too_temp = true;
-
+                    scannerView.setAboveText(getString(R.string.scanner_ing));
                     start.setText(getString(R.string.scanner_lock));
                     more.setVisibility(View.GONE);
                     startOcr();
@@ -345,38 +343,38 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         ocrrrrStop = true;
     }
 
+    private Action1<String> ocrAction = new Action1<String>() {
+        @Override
+        public void call(String s) {
+            too_temp = false;
+            if (!ocrrrrStop){
+                // TODO: 16-7-13 hide the middle result
+                scannerView.setAboveText(s);
+                translate(s.toLowerCase());
+                //continue
+                //startOcr();
+            }
+        }
+    };
+    private Action1<Throwable> ocrErrAction = new Action1<Throwable>() {
+        @Override
+        public void call(Throwable throwable) {
+            //ocr failure
+            if (camera == null) return;
+            camera.autoFocus(new Camera.AutoFocusCallback() {
+                @Override
+                public void onAutoFocus(boolean success, Camera camera) {
+                    if (success) startOcr();
+                    else {
+                        Toast.makeText(getActivity(), R.string.ocr_failure, Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        }
+    };
     private void startOcr() {
         if (ocrrrrStop) return;
-        Action1<String> action = new Action1<String>() {
-            @Override
-            public void call(String s) {
-                if (!ocrrrrStop){
-                    // TODO: 16-7-13 hide the middle result
-                    scannerView.setAboveText(s);
-                    translate(s);
-                    //continue
-                    //startOcr();
-                }
-            }
-        };
-
-        Action1<Throwable> errAction = new Action1<Throwable>() {
-            @Override
-            public void call(Throwable throwable) {
-                //ocr failure
-                if (camera == null) return;
-                camera.autoFocus(new Camera.AutoFocusCallback() {
-                    @Override
-                    public void onAutoFocus(boolean success, Camera camera) {
-                        if (success) startOcr();
-                        else {
-                            Toast.makeText(getActivity(), R.string.ocr_failure, Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                });
-            }
-        };
-        ocrWorker.doOcr(bitmap2Gray(scannerView.getScanedImage(preview.getBitmap())),action,errAction);
+        ocrWorker.doOcr(bitmap2Gray(scannerView.getScanedImage(preview.getBitmap())), ocrAction, ocrErrAction);
     }
 
     private void translate(String s) {
@@ -406,7 +404,6 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
             @Override
             public void onNext(TranslateResult translateResult) {
                 if (ocrrrrStop) return;
-                too_temp = false;
 
                 result = translateResult.source;
                 List<String> results = new ArrayList<>();
@@ -415,6 +412,9 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
                 results.addAll(translateResult.mean);
                 scannerView.setResult(results);
                 more.setVisibility(View.VISIBLE);
+//                more.setTypeface(Typeface.createFromAsset(getContext().getAssets(), "font/segoeui.ttf"));
+//                Log.d(TAG, "onNext: phonetic: " + translateResult.phonetic);
+//                more.setText(translateResult.phonetic);
                 // continue ocr
                 startOcr();
             }
