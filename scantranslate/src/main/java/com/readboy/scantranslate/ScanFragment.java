@@ -1,5 +1,6 @@
 package com.readboy.scantranslate;
 
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -23,7 +24,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.readboy.scantranslate.Ocr.OcrWorker;
@@ -39,6 +44,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import rx.Observable;
 import rx.Observer;
@@ -71,8 +77,9 @@ import rx.schedulers.Schedulers;
  *
  *
  */
-public class ScanFragment extends Fragment {
+public class ScanFragment extends Fragment implements TextureView.SurfaceTextureListener {
     private static final String TAG = "ScanFragment";
+    private static final String OCR_RESULT = "ocr_result";
     /**
      *
      */
@@ -81,12 +88,15 @@ public class ScanFragment extends Fragment {
     private ScannerOverlayView scannerView;
     private FrameLayout previewFrame;
     private TextureView preview;
-    private Button ok;
+    private TextView more;
+    private ImageButton back;
+    private CheckBox flash;
+    private Button start;
 
     private Camera camera;
     private Camera.AutoFocusCallback focusCallback;
-    private Camera.PictureCallback pictureCallback;
     private boolean isAutoFocusAble;
+    private boolean hasFlashLight;
 
     private String result;
     private OcrWorker ocrWorker = new OcrWorker();
@@ -108,66 +118,66 @@ public class ScanFragment extends Fragment {
         View view = LayoutInflater.from(getActivity()).inflate(R.layout.activity_scanner,null,false);
         getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         handler = new Handler();
+
         initView(view);
-        initCamera();
+
         initOcr();
+
         return view;
     }
 
-    /**
-     * init Ocr
-     */
-    private void initOcr() {
-        Log.d(TAG, "initOcr: start");
-        Action1<String> action1 = new Action1<String>() {
-            @Override
-            public void call(String s) {
-                // start autoFocus to take picture
-                camera.autoFocus(focusCallback);
-                handler.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (camera != null) {
-                            doOcr(getGrayBitmap(scannerView.getScanedImage(preview.getBitmap())));
-                        }
-                    }
-                },1000);
-            }
-        };
-        Action1<Throwable> errAction = new Action1<Throwable>() {
-            @Override
-            public void call(Throwable throwable) {
-                // init failure
-                Log.e(TAG, "init ocr failure :" + throwable.getMessage());
-            }
-        };
-        if (!isExist()){
-            deepFile("tessdata");
-        }else {
-            ocrWorker.initOcr(action1, errAction);
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (preview == null){
+            preview = new TextureView(getActivity());
+            preview.setSurfaceTextureListener(this);
+            previewFrame.removeAllViews();
+            previewFrame.addView(preview);
         }
     }
 
-    public Bitmap getGrayBitmap(Bitmap mBitmap) {
-        Bitmap mGrayBitmap = Bitmap.createBitmap(mBitmap.getWidth(), mBitmap.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas mCanvas = new Canvas(mGrayBitmap);
-        Paint mPaint = new Paint();
-
-        //创建颜色变换矩阵
-        ColorMatrix mColorMatrix = new ColorMatrix();
-        //设置灰度影响范围
-        mColorMatrix.setSaturation(0);
-        //创建颜色过滤矩阵
-        ColorMatrixColorFilter mColorFilter = new ColorMatrixColorFilter(mColorMatrix);
-        //设置画笔的颜色过滤矩阵
-        mPaint.setColorFilter(mColorFilter);
-        //使用处理后的画笔绘制图像
-        mCanvas.drawBitmap(mBitmap, 0, 0, mPaint);
-//        FileUtil.saveBitmap(mGrayBitmap, SystemClock.currentThreadTimeMillis() + "ocr.jpg");
-        return mGrayBitmap;
+    @Override
+    public void onPause() {
+        super.onPause();
+        releaseCamera();
     }
 
-    private void deepFile(final String path) {
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        ocrWorker.release();
+
+    }
+
+    private void releaseCamera() {
+        if (camera != null) {
+            camera.stopPreview();
+            camera.release();
+            camera = null;
+            preview = null;
+        }
+    }
+
+    private void initOcr() {
+        if (!isExist()){
+            deepFile("tessdata");
+        }else {
+            ocrWorker.initOcr(new Action1<String>() {
+                @Override
+                public void call(String s) {
+
+                }
+            }, new Action1<Throwable>() {
+                @Override
+                public void call(Throwable throwable) {
+
+                }
+            });
+        }
+    }
+
+    public void deepFile(final String path) {
         Log.d(TAG, "deepFile: ");
         Subscriber<String> subscriber = new Subscriber<String>() {
             @Override
@@ -222,13 +232,12 @@ public class ScanFragment extends Fragment {
             Log.d(TAG, "copyFile: " + path);
             File file = new File(path);
             if(!file.exists()) file.mkdir();
-            InputStream is = getActivity().getAssets().open(path);
+            InputStream is = getActivity().
+                    getAssets().open(path);
             FileOutputStream fos = new FileOutputStream(new File(ScanActivity.filePath
                     + path));
             byte[] buffer = new byte[1024];
-            int count = 0;
             while (true) {
-                count++;
                 int len = is.read(buffer);
                 if (len == -1) {
                     break;
@@ -249,146 +258,130 @@ public class ScanFragment extends Fragment {
         }
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        //start preview
-        Log.d(TAG, "onResume: ");
-        if (preview == null) {
-            preview = new TextureView(getActivity());
-            preview.setSurfaceTextureListener(new MySurfaceTextureListener());
-            previewFrame.removeAllViews();
-            previewFrame.addView(preview);
-        }
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        releaseCamera();
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        ocrWorker.release();
-    }
-
-
-    private void releaseCamera() {
-        if (camera != null) {
-            camera.stopPreview();
-            camera.release();
-            preview = null;
-            camera = null;
-        }
-    }
-
-    /**
-     * take a picture and ocr it
-     */
-    private void takePicture() {
-        Log.d(TAG, "takePicture: start aotofocus");
-        if (camera != null){
-            //camera.autoFocus(focusCallback);
-            doOcr(getGrayBitmap(scannerView.getScanedImage(preview.getBitmap())));
-        }
-    }
-
     private void initView(View view) {
+        back = (ImageButton) view.findViewById(R.id.scanner_back);
+        flash = (CheckBox) view.findViewById(R.id.scanner_flash);
         scannerView = (ScannerOverlayView) view.findViewById(R.id.scanner);
         previewFrame = (FrameLayout) view.findViewById(R.id.scanner_previewframe);
-        ok = (Button) view.findViewById(R.id.scan_ok);
+        more = (TextView) view.findViewById(R.id.scanner_more);
+        start = (Button) view.findViewById(R.id.scan_start);
 
-        if (preview == null){
-            preview = new TextureView(getActivity());
-            preview.setSurfaceTextureListener(new MySurfaceTextureListener());
-            previewFrame.removeAllViews();
-            previewFrame.addView(preview);
-        }
-
-        scannerView.setOnClickListener(new View.OnClickListener() {
+        back.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (camera != null){
-                    camera.autoFocus(new Camera.AutoFocusCallback() {
-                        @Override
-                        public void onAutoFocus(boolean success, Camera camera) {
-
-                        }
-                    });
-                }
+                getActivity().finish();
             }
         });
-        ok.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                okListener.onClick(v);
-            }
-        });
-    }
 
-    private void initCamera(){
-        //check whether have camera
-        if (!HardwareUtil.checkCameraHardware(getActivity())) {
-            Toast.makeText(getActivity(), R.string.noHardCamera, Toast.LENGTH_SHORT).show();
-            getActivity().finish();
-        }
-
-        focusCallback = new Camera.AutoFocusCallback() {
-            @Override
-            public void onAutoFocus(boolean success, Camera camera) {
-                if (success) {
-                    Log.d(TAG, "onAutoFocus: success");
-                    //doOcr(scannerView.getScanedImage(preview.getBitmap()));
-                    handler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (ScanFragment.this.camera != null) {
-                                ScanFragment.this.camera.autoFocus(focusCallback);
-                            }
-                        }
-                    },5000);
-                } else {
-                    if (camera != null) {
-                        camera.autoFocus(focusCallback);
+        if (!HardwareUtil.checkFlashLight(getActivity())){
+            // has not flashlight
+            flash.setVisibility(View.GONE);
+        }else {
+            flash.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    if (isChecked) {
+                        // flash on
+                        HardwareUtil.turnLightOn(camera);
+                    } else {
+                        // flash off
+                        HardwareUtil.turnLightOff(camera);
                     }
-//                    takePicture();
-                    Log.e(TAG, "onAutoFocus: failure");
                 }
+            });
+        }
+
+        preview = new TextureView(getActivity());
+        preview.setSurfaceTextureListener(this);
+        previewFrame.removeAllViews();
+        previewFrame.addView(preview);
+
+        more.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // TODO: 16-7-13 add the target activity
+//                Intent intent = new Intent();
+//                intent.putExtra(OCR_RESULT,result);
+//                startActivity(intent);
+                getActivity().finish();
             }
-        };
+        });
+
+        start.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN){
+                    //press the button
+                    Log.d(TAG, "onGenericMotion: press");
+                    ocrrrrStop = false;
+                    too_temp = true;
+
+                    start.setText(getString(R.string.scanner_lock));
+                    more.setVisibility(View.GONE);
+                    startOcr();
+                }else if (event.getAction() == MotionEvent.ACTION_UP){
+                    // release the button
+                    Log.d(TAG, "onGenericMotion: release");
+                    stopOcr();
+                    start.setText(getString(R.string.scanner_start));
+                    if (too_temp){
+                        Toast.makeText(getActivity(), R.string.press_toosoon, Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
+                    if (result == null) return true;
+
+                    scannerView.setAboveText(getString(R.string.lock_word));
+                    more.setVisibility(View.VISIBLE);
+                }
+                return true;
+            }
+        });
     }
 
-    /**
-     * do Ocr
-     */
-    private void doOcr(Bitmap bitmap){
-        Action1<String> ocrAction = new Action1<String>() {
+    private boolean too_temp;
+
+    private boolean ocrrrrStop ;
+    private void stopOcr() {
+        ocrrrrStop = true;
+    }
+
+    private void startOcr() {
+        if (ocrrrrStop) return;
+        Action1<String> action = new Action1<String>() {
             @Override
             public void call(String s) {
-                Log.d(TAG, "ocr success ,result :" + s);
-                translate(s.toLowerCase());
+                if (!ocrrrrStop){
+                    // TODO: 16-7-13 hide the middle result
+                    scannerView.setAboveText(s);
+                    translate(s);
+                    //continue
+                    //startOcr();
+                }
             }
         };
+
         Action1<Throwable> errAction = new Action1<Throwable>() {
             @Override
             public void call(Throwable throwable) {
-                Log.e(TAG, "ocr failure");
-                takePicture();
+                //ocr failure
+                if (camera == null) return;
+                camera.autoFocus(new Camera.AutoFocusCallback() {
+                    @Override
+                    public void onAutoFocus(boolean success, Camera camera) {
+                        if (success) startOcr();
+                        else {
+                            Toast.makeText(getActivity(), R.string.ocr_failure, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
             }
         };
-        ocrWorker.doOcr(bitmap, ocrAction, errAction);
+        ocrWorker.doOcr(bitmap2Gray(scannerView.getScanedImage(preview.getBitmap())),action,errAction);
     }
 
-    /**
-     * do translate and show the result
-     *
-     * @param query : the word should be translated
-     */
-    private void translate(String query) {
-        Log.d(TAG, "translate: start");
-        Observer<TranslateResult> observer = new Observer<TranslateResult>() {
+    private void translate(String s) {
+        if (ocrrrrStop) return;
+        Translator.getInstance().translate(s, new Subscriber<TranslateResult>() {
             @Override
             public void onCompleted() {
 
@@ -396,69 +389,38 @@ public class ScanFragment extends Fragment {
 
             @Override
             public void onError(Throwable e) {
-                takePicture();
-//                List<String> result = new ArrayList<>();
-//                result.add("翻译失败,请对准您要识别的单词");
-//                scannerView.setResult(result);
-                Log.d(TAG, "translate onError: " + e.getMessage());
+                //request camera auto focus to take picture again
+                if (camera == null) return;
+                camera.autoFocus(new Camera.AutoFocusCallback() {
+                    @Override
+                    public void onAutoFocus(boolean success, Camera camera) {
+                        if (success) startOcr();
+                        else {
+                            Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
+                            startOcr();
+                        }
+                    }
+                });
             }
 
             @Override
             public void onNext(TranslateResult translateResult) {
-                Log.d(TAG, "translate success : " + translateResult.source);
+                if (ocrrrrStop) return;
+                too_temp = false;
+
                 result = translateResult.source;
                 List<String> results = new ArrayList<>();
-                results.add(translateResult.source + ":");
-                results.add("音标:" + translateResult.phonetic);
+                results.add(translateResult.source);
+                results.add(translateResult.phonetic);
                 results.addAll(translateResult.mean);
                 scannerView.setResult(results);
-                ok.setVisibility(View.VISIBLE);
-                takePicture();
+                more.setVisibility(View.VISIBLE);
+                // continue ocr
+                startOcr();
             }
-        };
-        Translator.getInstance().translate(query, observer);
+        });
     }
 
-    private void showOK(String result) {
-        this.result = result;
-        ok.setVisibility(View.VISIBLE);
-    }
-
-    private class MySurfaceTextureListener implements TextureView.SurfaceTextureListener{
-
-        @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            openCamera();
-            try {
-                if (camera != null){
-                    camera.setPreviewTexture(surface);
-                    camera.startPreview();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-
-        }
-
-        @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            if (camera != null){
-                camera.stopPreview();
-                camera.release();
-            }
-            return false;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-
-        }
-    }
 
     private void openCamera() {
         if (camera == null) {
@@ -501,5 +463,58 @@ public class ScanFragment extends Fragment {
         //exposure compensation: black should minus and white should add in generally;
 //            parameters.setExposureCompensation(1);
         camera.setParameters(cameraParameters);
+    }
+
+    public Bitmap bitmap2Gray(Bitmap bmSrc) {
+        // 得到图片的长和宽
+        int width = bmSrc.getWidth();
+        int height = bmSrc.getHeight();
+        // 创建目标灰度图像
+        Bitmap bmpGray = null;
+        bmpGray = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        // 创建画布
+        Canvas c = new Canvas(bmpGray);
+        Paint paint = new Paint();
+        ColorMatrix cm = new ColorMatrix();
+        cm.setSaturation(0);
+        ColorMatrixColorFilter f = new ColorMatrixColorFilter(cm);
+        paint.setColorFilter(f);
+        c.drawBitmap(bmSrc, 0, 0, paint);
+        return bmpGray;
+    }
+
+    @Override
+    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+        openCamera();
+        try {
+            camera.setPreviewTexture(surface);
+            camera.startPreview();
+            camera.autoFocus(new Camera.AutoFocusCallback() {
+                @Override
+                public void onAutoFocus(boolean success, Camera camera) {
+
+                }
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+    @Override
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+
+    }
+
+    @Override
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+
+        return false;
+    }
+
+    @Override
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+
     }
 }

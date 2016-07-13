@@ -5,4 +5,12 @@
 
     <string name="ok">更多</string>
     <string name="scanner_back">扫描取词</string>
+    <string name="scanner_title">扫描取词</string>
+    <string name="scanner_start">按住取词</string>
+    <string name="scanner_lock">松开锁定</string>
+    <string name="scanner_more"><![CDATA[查看更多解析>>]]></string>
+    <string name="focus_failure">聚焦失败,请调整距离后重试</string>
+    <string name="ocr_failure">识别失败,请调整距离后重试</string>
+    <string name="lock_word">单词已锁定</string>
+    <string name="press_toosoon">按下时间太短</string>
 </resources>

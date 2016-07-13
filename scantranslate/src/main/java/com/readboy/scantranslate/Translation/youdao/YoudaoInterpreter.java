@@ -6,6 +6,8 @@ import com.readboy.scantranslate.Translation.InterpretService;
 import com.readboy.scantranslate.Translation.Interpreter;
 import com.readboy.scantranslate.Translation.TranslateResult;
 
+import java.util.concurrent.TimeUnit;
+
 import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
@@ -46,6 +48,7 @@ public class YoudaoInterpreter implements Interpreter {
             service = retrofit.create(InterpretService.class);
         }
         service.getYoudaoTranslateJsonBean(KEY_FROM,API_KEY,TYPE,DOCTYPE,VERSION,query)
+                .throttleLast(500, TimeUnit.MILLISECONDS)
                 .subscribeOn(Schedulers.io())
                 .map(new Transformer())
                 .observeOn(AndroidSchedulers.mainThread())

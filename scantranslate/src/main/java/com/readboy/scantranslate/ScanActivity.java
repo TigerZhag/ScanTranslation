@@ -90,9 +90,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             "Android" + File.separator + "data" + File.separator + "com.readboy.scantranslation" +
             File.separator + "files" + File.separator  + "mounted" + File.separator;
 
-
-    private Button ok;
-
     private String result;
 
     public static final String SCAN_MODE = "scan_mode";
@@ -219,7 +216,7 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
     private void initView() {
         scannerView = (ScannerOverlayView) findViewById(R.id.scanner);
         previewFrame = (FrameLayout) findViewById(R.id.scanner_previewframe);
-        ok = (Button) findViewById(R.id.scan_ok);
+
 
         if (preview == null) {
             preview = new TextureView(this);
@@ -227,17 +224,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
             previewFrame.removeAllViews();
             previewFrame.addView(preview);
         }
-
-        ok.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //Toast.makeText(ScanActivity.this, "send result to searchActivity", Toast.LENGTH_SHORT).show();
-//                takePicture();
-                ok.setVisibility(View.GONE);
-                // TODO: 16-7-11 handle the ocr result
-                finish();
-            }
-        });
     }
 
     private void initCamera() {
@@ -462,7 +448,6 @@ public class ScanActivity extends AppCompatActivity implements TextureView.Surfa
                 results.add("音标:" + translateResult.phonetic);
                 results.addAll(translateResult.mean);
                 scannerView.setResult(results);
-                ok.setVisibility(View.VISIBLE);
                 takePicture();
             }
         };

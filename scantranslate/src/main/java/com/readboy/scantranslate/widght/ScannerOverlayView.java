@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -14,6 +15,8 @@ import com.readboy.scantranslate.R;
 import com.readboy.scantranslate.Utils.ImageViewUtil;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -27,6 +30,7 @@ public class ScannerOverlayView extends View{
 
     private Paint paint;
 
+    private String aboveText;
     private List<String> result = new ArrayList<>();
 
     private static final int textSize = 16;
@@ -93,11 +97,37 @@ public class ScannerOverlayView extends View{
             paint.setAlpha(0xFF);
             int texttop = (int) (frame.bottom + textPaddingTop * metrics.density);
             Rect rect = new Rect();
+            List<String> temp = new ArrayList<>();
             for (String text : result) {
-//                paint.measureText(text);
+                int times = (int) (Math.floor(paint.measureText(text,0,text.length()) / getWidth()) + 1);
+                if (times == 1) temp.add(text);
+                else cutString(text,times,temp);
+            }
+            for (String text : temp) {
                 paint.getTextBounds(text,0,text.length(),rect);
-                canvas.drawText(text, frame.left,texttop + rect.height(), paint);
+                Typeface phoneticType = Typeface.createFromAsset(getContext().getAssets(),"font/segoeui.ttf");
+                paint.setTypeface(phoneticType);
+                canvas.drawText(text, (getWidth() - rect.width()) / 2,texttop + rect.height(), paint);
                 texttop += rect.height();
+            }
+
+        }
+
+        //draw text above the frame
+        if (aboveText != null && aboveText.length() > 0){
+            Rect rect = new Rect();
+            paint.getTextBounds(aboveText, 0, aboveText.length(), rect);
+            canvas.drawText(aboveText,frame.left,frame.top - textPaddingTop*metrics.density - rect.height(),paint);
+        }
+    }
+
+    private void cutString(String text, int times,List<String> list) {
+        int minLength = text.length() / times;
+        for (int i = 0; i < times; i++) {
+            if (i == times - 1){
+                list.add(text.substring(minLength * i,text.length()));
+            }else {
+                list.add(text.substring(minLength * i,minLength * i + minLength));
             }
         }
     }
@@ -108,6 +138,11 @@ public class ScannerOverlayView extends View{
 
     public List<String> getResult(){
         return result;
+    }
+
+    public void setAboveText(String text){
+        this.aboveText = text;
+        invalidate();
     }
 
     public void setResult(List<String> results){
@@ -133,10 +168,6 @@ public class ScannerOverlayView extends View{
         final float scaleFactorHeight = actualImageHeight / displayedImageHeight;
 
         // Get crop window position relative to the displayed image.
-        Log.d(TAG, "getScanedImage: displayedImageRect.left : " + getLeft());
-        Log.d(TAG, "getScanedImage: bitmapWidth:" + actualImageWidth);
-        Log.d(TAG, "getScanedImage: textureWidth:" + getWidth());
-        Log.d(TAG, "getScanedImage: scaleFactorWidth : " + scaleFactorWidth);
         final float cropWindowX = frame.left;// - displayedImageRect.left;
         final float cropWindowY = frame.top - getTop();
         final float cropWindowWidth = frame.width();
@@ -147,9 +178,6 @@ public class ScannerOverlayView extends View{
         final float actualCropY = cropWindowY * scaleFactorHeight;
         final float actualCropWidth = cropWindowWidth * scaleFactorWidth;
         final float actualCropHeight = cropWindowHeight * scaleFactorHeight;
-
-        Log.d(TAG, "getScanedImage: frame left: " + frame.left);
-        Log.d(TAG, "getScanedImage: crop left" + actualCropX);
 
         // Crop the subset from the original Bitmap.
         Bitmap croppedBitmap = Bitmap.createBitmap(bitmap,

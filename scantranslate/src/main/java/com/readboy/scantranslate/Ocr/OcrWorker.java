@@ -9,6 +9,7 @@ import com.googlecode.tesseract.android.TessBaseAPI;
 import com.readboy.scantranslate.Utils.FileUtil;
 
 import java.io.File;
+import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
 import rx.Subscriber;
@@ -107,7 +108,8 @@ public class OcrWorker {
                     subscriber.onError(new Throwable("请对准您要识别的单词"));
                 }
             }
-        }).subscribeOn(Schedulers.computation())
+        }).throttleLast(500, TimeUnit.MILLISECONDS)
+          .subscribeOn(Schedulers.computation())
           .observeOn(AndroidSchedulers.mainThread())
           .subscribe(action1);
     }
