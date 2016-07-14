@@ -10,6 +10,7 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/dictionary_library" />
             <option value="$PROJECT_DIR$/scantranslate" />
             <option value="$PROJECT_DIR$/tesstwo" />
           </set>
@@ -18,6 +19,7 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/dictionary_library" />
             <option value="$PROJECT_DIR$/scantranslate" />
             <option value="$PROJECT_DIR$/tesstwo" />
           </set>

@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.content.res.TypedArrayUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -28,6 +29,7 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.readboy.library.quicksearch.QuickSearchWord;
 import com.readboy.scantranslate.Ocr.OcrWorker;
 import com.readboy.scantranslate.Translation.TranslateResult;
 import com.readboy.scantranslate.Translation.Translator;
@@ -116,9 +118,12 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         initView(view);
 
         initOcr();
+        initTranslate();
 
         return view;
     }
+
+    private QuickSearchWord quickSearchWord;
 
     @Override
     public void onResume() {
@@ -324,6 +329,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
                     start.setText(getString(R.string.scanner_start));
                     if (too_temp){
                         Toast.makeText(getActivity(), R.string.press_toosoon, Toast.LENGTH_SHORT).show();
+                        scannerView.setAboveText("");
                         return true;
                     }
                     if (result == null) return true;
@@ -377,48 +383,90 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         ocrWorker.doOcr(bitmap2Gray(scannerView.getScanedImage(preview.getBitmap())), ocrAction, ocrErrAction);
     }
 
-    private void translate(String s) {
-        if (ocrrrrStop) return;
-        Translator.getInstance().translate(s, new Subscriber<TranslateResult>() {
-            @Override
-            public void onCompleted() {
+    private Subscriber<TranslateResult> translateResultSubscriber = new Subscriber<TranslateResult>() {
+        @Override
+        public void onCompleted() {
 
-            }
+        }
 
-            @Override
-            public void onError(Throwable e) {
-                //request camera auto focus to take picture again
-                if (camera == null) return;
-                camera.autoFocus(new Camera.AutoFocusCallback() {
-                    @Override
-                    public void onAutoFocus(boolean success, Camera camera) {
-                        if (success) startOcr();
-                        else {
-                            Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
-                            startOcr();
-                        }
+        @Override
+        public void onError(Throwable e) {
+            //request camera auto focus to take picture again
+            if (camera == null) return;
+            camera.autoFocus(new Camera.AutoFocusCallback() {
+                @Override
+                public void onAutoFocus(boolean success, Camera camera) {
+                    if (success) startOcr();
+                    else {
+                        Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
+                        startOcr();
                     }
-                });
-            }
+                }
+            });
+        }
 
-            @Override
-            public void onNext(TranslateResult translateResult) {
-                if (ocrrrrStop) return;
+        @Override
+        public void onNext(TranslateResult translateResult) {
+            if (ocrrrrStop) return;
 
-                result = translateResult.source;
-                List<String> results = new ArrayList<>();
-                results.add(translateResult.source);
-                results.add(translateResult.phonetic);
-                results.addAll(translateResult.mean);
-                scannerView.setResult(results);
-                more.setVisibility(View.VISIBLE);
+            result = translateResult.source;
+            List<String> results = new ArrayList<>();
+            results.add(translateResult.source);
+            results.add(translateResult.phonetic);
+            results.addAll(translateResult.mean);
+            scannerView.setResult(results);
+            more.setVisibility(View.VISIBLE);
 //                more.setTypeface(Typeface.createFromAsset(getContext().getAssets(), "font/segoeui.ttf"));
 //                Log.d(TAG, "onNext: phonetic: " + translateResult.phonetic);
 //                more.setText(translateResult.phonetic);
-                // continue ocr
-                startOcr();
+            // continue ocr
+            startOcr();
+        }
+    };
+    private int translate_err_count = 0;
+
+    private void initTranslate() {
+        quickSearchWord = new QuickSearchWord(getContext());
+        quickSearchWord.setListener(new QuickSearchWord.OnQuickSearchListener() {
+            @Override
+            public void onResult(int status, String result) {
+                if (status == QuickSearchWord.STATUS_ERROR){
+                    if (translate_err_count < 8){
+                        translate_err_count ++;
+                    }else {
+                        translate_err_count = 0;
+                        if (camera == null) return;
+                        camera.autoFocus(new Camera.AutoFocusCallback() {
+                            @Override
+                            public void onAutoFocus(boolean success, Camera camera) {
+                                if (success) startOcr();
+                                else {
+                                    Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
+                                    startOcr();
+                                }
+                            }
+                        });
+                    }
+                }else {
+                    translate_err_count = 0;
+                    Log.d(TAG, "translate result :" + result);
+                    String[] temp = result.split("\n");
+                    List<String> results = new ArrayList<>(temp.length);
+                    for (String tem : temp) {
+                        results.add(tem);
+                    }
+                    scannerView.setResult(results);
+                    more.setVisibility(View.VISIBLE);
+                    startOcr();
+                }
             }
         });
+    }
+
+    private void translate(String s) {
+        if (ocrrrrStop) return;
+        quickSearchWord.search(s);
+       // Translator.getInstance().translate(s, translateResultSubscriber);
     }
 
 

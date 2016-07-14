@@ -16,6 +16,13 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+
+    repositories {
+        maven {
+            url 'http://nexus.dream/nexus/content/groups/public/'
+        }
+        mavenCentral()
+    }
 }
 
 dependencies {
@@ -28,4 +35,5 @@ dependencies {
     compile 'io.reactivex:rxjava:1.1.6'
     compile 'io.reactivex:rxandroid:1.2.1'
     compile 'com.squareup.retrofit2:adapter-rxjava:2.1.0'
+    compile project(':dictionary_library')
 }

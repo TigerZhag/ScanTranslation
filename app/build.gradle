@@ -17,6 +17,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    repositories {
+        maven {
+            url 'http://nexus.dream/nexus/content/groups/public/'
+        }
+        mavenCentral()
+    }
 }
 
 dependencies {
