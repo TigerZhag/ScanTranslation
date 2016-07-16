@@ -11,9 +11,9 @@ import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
-import android.support.v4.content.res.TypedArrayUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -90,7 +90,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
     private Button start;
 
     private Camera camera;
-    private Camera.AutoFocusCallback focusCallback;
+
     private boolean isAutoFocusAble;
     private boolean hasFlashLight;
 
@@ -118,7 +118,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         initView(view);
 
         initOcr();
-        initTranslate();
+//        initTranslate();
 
         return view;
     }
@@ -146,7 +146,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
     public void onDestroyView() {
         super.onDestroyView();
         ocrWorker.release();
-
+//        quickSearchWord.destroy();
     }
 
     private void releaseCamera() {
@@ -214,15 +214,12 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
     }
 
     private void copyFile(String path) throws IOException {
-        Log.d(TAG, "copyFile: ");
         String str[] = getActivity().getAssets().list(path);
         if (str.length > 0) {//如果是目录
             File file = new File(ScanActivity.filePath + path);
             file.mkdirs();
-            Log.d(TAG, "copyFile: 2");
             for (String string : str) {
                 path = path + "/" + string;
-                System.out.println("lilongc:\t" + path);
                 // textView.setText(textView.getText()+"\t"+path+"\t");
                 copyFile(path);
                 path = path.substring(0, path.lastIndexOf('/'));
@@ -321,7 +318,9 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
                     scannerView.setAboveText(getString(R.string.scanner_ing));
                     start.setText(getString(R.string.scanner_lock));
                     more.setVisibility(View.GONE);
-                    startOcr();
+                    if (translate_finish) {
+                        startOcr();
+                    }
                 }else if (event.getAction() == MotionEvent.ACTION_UP){
                     // release the button
                     Log.d(TAG, "onGenericMotion: release");
@@ -356,9 +355,9 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
             if (!ocrrrrStop){
                 // TODO: 16-7-13 hide the middle result
                 scannerView.setAboveText(s);
-                translate(s.toLowerCase());
+                translate(s.toLowerCase().replaceAll("[^(A-Za-z)]", ""));
                 //continue
-                //startOcr();
+//                startOcr();
             }
         }
     };
@@ -366,16 +365,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         @Override
         public void call(Throwable throwable) {
             //ocr failure
-            if (camera == null) return;
-            camera.autoFocus(new Camera.AutoFocusCallback() {
-                @Override
-                public void onAutoFocus(boolean success, Camera camera) {
-                    if (success) startOcr();
-                    else {
-                        Toast.makeText(getActivity(), R.string.ocr_failure, Toast.LENGTH_SHORT).show();
-                    }
-                }
-            });
+
         }
     };
     private void startOcr() {
@@ -392,17 +382,7 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         @Override
         public void onError(Throwable e) {
             //request camera auto focus to take picture again
-            if (camera == null) return;
-            camera.autoFocus(new Camera.AutoFocusCallback() {
-                @Override
-                public void onAutoFocus(boolean success, Camera camera) {
-                    if (success) startOcr();
-                    else {
-                        Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
-                        startOcr();
-                    }
-                }
-            });
+
         }
 
         @Override
@@ -423,50 +403,42 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
             startOcr();
         }
     };
-    private int translate_err_count = 0;
 
+    private boolean translate_finish = true ;
+    private long translate_begin;
     private void initTranslate() {
         quickSearchWord = new QuickSearchWord(getContext());
+        quickSearchWord.setMaxCount(100);
         quickSearchWord.setListener(new QuickSearchWord.OnQuickSearchListener() {
             @Override
             public void onResult(int status, String result) {
-                if (status == QuickSearchWord.STATUS_ERROR){
-                    if (translate_err_count < 8){
-                        translate_err_count ++;
-                    }else {
-                        translate_err_count = 0;
-                        if (camera == null) return;
-                        camera.autoFocus(new Camera.AutoFocusCallback() {
-                            @Override
-                            public void onAutoFocus(boolean success, Camera camera) {
-                                if (success) startOcr();
-                                else {
-                                    Toast.makeText(getActivity(), R.string.focus_failure, Toast.LENGTH_SHORT).show();
-                                    startOcr();
-                                }
-                            }
-                        });
-                    }
-                }else {
-                    translate_err_count = 0;
+                translate_finish = true;
+                if (ocrrrrStop) return;
+                Log.e(TAG, "translate take time " + (SystemClock.currentThreadTimeMillis() - translate_begin) + "ms" );
+                if (status == quickSearchWord.STATUS_SUCCESS){
                     Log.d(TAG, "translate result :" + result);
                     String[] temp = result.split("\n");
                     List<String> results = new ArrayList<>(temp.length);
-                    for (String tem : temp) {
-                        results.add(tem);
+                    for (int i = 0; i < temp.length;i ++) {
+//                        if (i == 8) break;
+//                        if (temp[i].length() > 20) temp[i] = temp[i].substring(0,20);
+                        results.add(temp[i]);
                     }
                     scannerView.setResult(results);
                     more.setVisibility(View.VISIBLE);
-                    startOcr();
                 }
+                startOcr();
             }
         });
     }
 
-    private void translate(String s) {
+    private void translate(final String s) {
         if (ocrrrrStop) return;
-        quickSearchWord.search(s);
-       // Translator.getInstance().translate(s, translateResultSubscriber);
+        translate_begin = SystemClock.currentThreadTimeMillis();
+        Log.e(TAG, "translate: " + s);
+        translate_finish = false;
+//        quickSearchWord.search(s);
+        Translator.getInstance().translate(s, translateResultSubscriber);
     }
 
 
@@ -479,7 +451,6 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
             }
         }
         Camera.Parameters cameraParameters = camera.getParameters();
-        isAutoFocusAble = cameraParameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_AUTO);
         if (this.getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE) {
             cameraParameters.set("orientation", "portrait"); //
             cameraParameters.set("rotation", 90); // 镜头角度转90度（默认摄像头是横拍）
@@ -488,26 +459,9 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
             cameraParameters.set("orientation", "landscape"); //
             camera.setDisplayOrientation(0); // 在2.2以上可以使用
         }
-        //set the picture format
-        //not all devices support arbitrary preview sizes.
-//            List<Camera.Size> previewSize = cameraParameters.getSupportedPreviewSizes();
-//            List<Camera.Size> pictureSize = cameraParameters.getSupportedPictureSizes();
-
-//            Log.d(TAG, "support size: " + previewSize.size());
-//            for (Camera.Size size : previewSize) {
-//                Log.d(TAG, "size : width : " + size.width + " height : " + size.height);
-//            }
-//            for (Camera.Size size : pictureSize) {
-//                Log.d(TAG, "support Picture size: width" + size.width + "height : " + size.height);
-//            }
-//            for (Integer format : cameraParameters.getSupportedPictureFormats()) {
-//                Log.d(TAG, "support format:" + format);
-//            }
-//            Camera.Size maxSize = previewSize.get(previewSize.size() - 1);
-        cameraParameters.setPreviewSize(1280, 960);
-        cameraParameters.setPictureSize(1280, 960);
+//        cameraParameters.setPreviewSize(1280, 960);
         cameraParameters.setPictureFormat(ImageFormat.JPEG);
-        camera.setParameters(cameraParameters);
+        cameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         //exposure compensation: black should minus and white should add in generally;
 //            parameters.setExposureCompensation(1);
         camera.setParameters(cameraParameters);
@@ -537,12 +491,6 @@ public class ScanFragment extends Fragment implements TextureView.SurfaceTexture
         try {
             camera.setPreviewTexture(surface);
             camera.startPreview();
-            camera.autoFocus(new Camera.AutoFocusCallback() {
-                @Override
-                public void onAutoFocus(boolean success, Camera camera) {
-
-                }
-            });
         } catch (IOException e) {
             e.printStackTrace();
         }
